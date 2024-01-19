@@ -42,6 +42,8 @@ def choose_file(title):
 
 
 def send_email(subject, body, to_email, pass_word, attachment_path):
+    
+    ######## BUG ########
     from_email = "tommy.chen@unicomnz.com"
     try:
         
@@ -64,7 +66,6 @@ def send_email(subject, body, to_email, pass_word, attachment_path):
         message["To"] = to_email
         message.attach(body_part)
         message.attach(attachment_part)
-        
         
         
         mailserver = smtplib.SMTP('smtp.office365.com', 587) 
@@ -121,7 +122,7 @@ def send_email_gui():
     tk.Label(root, text="标题:").grid(row=4, column=0, padx=10, pady=5)
     title_entry = tk.Entry(root)
     title_entry.grid(row=4, column=1, padx=10, pady=5)
-    
+
 
     body_entry = tk.Text(root,wrap="word", width=50, height=20)
     body_entry.grid(row=5, column=1,padx=10, pady=10)
