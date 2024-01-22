@@ -12,7 +12,6 @@ class EmailSender:
         self.fail = 0
     
     def send_email(self, subject, body, from_email, to_email, pass_word, attachment_path):
-        to_email = "tommy.chen@unicomnz.com"
         try:
             message = MIMEMultipart()
             message["Subject"] = subject

@@ -17,8 +17,10 @@ def open_file_dialog(entry_widget, file_types, ):
 
 def send_email_gui():
     root = tk.Tk()
-    font = Font(size=16,weight="bold")
     root.title("邮件发送器")
+
+
+    font = Font(size=16,weight="bold")
     tk.Label(root, text="发送邮箱:",width=20,height=3,font= font).grid(row=0, column=0, padx=10, pady=5)
     from_email_entry = tk.Entry(root,width=30,font= font)
     from_email_entry.grid(row=0, column=1, padx=10, pady=5)
@@ -33,7 +35,7 @@ def send_email_gui():
     license_file_entry.grid(row=2, column=1, padx=10, pady=5)
     tk.Button(root, text="选择文件", command=lambda: open_file_dialog(license_file_entry,[("Excel files", "*.xlsx;*.xls"), ("All files", "*.*")],)).grid(row=2, column=2, padx=10, pady=5)
 
-    tk.Label(root, text="email列表文件:",width=20,height=3,font= font).grid(row=3, column=0, padx=10, pady=5)
+    tk.Label(root, text="Email列表文件:",width=20,height=3,font= font).grid(row=3, column=0, padx=10, pady=5)
     email_file_entry = tk.Entry(root,width=30,font= font)
     email_file_entry.grid(row=3, column=1, padx=10, pady=5)
     tk.Button(root, text="选择文件", command=lambda: open_file_dialog(email_file_entry,[("Excel files", "*.xlsx;*.xls"), ("All files", "*.*")],)).grid(row=3, column=2, padx=10, pady=5)
