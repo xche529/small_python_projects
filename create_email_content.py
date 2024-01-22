@@ -27,7 +27,7 @@ class EmailWriter:
         for license in company.licenses:
             if len(license.name) > max_license_name_length:
                 max_license_name_length = len(license.name)
-        max_license_name_length += 20
+        max_license_name_length += 10
         for license in company.licenses:
             print(license.name)
             licenses_str += self.create_license_string(license, max_license_name_length)
@@ -47,7 +47,8 @@ class EmailWriter:
             if "{{license_quantity}}" in content_list[i]:
                 content_list[i] = content_list[i].replace("{{license_quantity}}", str(license.quantity))
             if "{{expiry_date}}" in content_list[i]:
-                content_list[i] = content_list[i].replace("{{expiry_date}}", str(license.expiry_date))
+                content_list[i] = content_list[i].replace("{{expiry_date}}", str(license.expiry_date.strftime("%Y-%m-%d")
+))
 
         template = template.format(*content_list)
         return template
