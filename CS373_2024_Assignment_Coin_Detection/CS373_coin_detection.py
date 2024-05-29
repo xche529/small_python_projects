@@ -1,6 +1,7 @@
 # Built in packages
 import math
 import sys
+import copy
 
 # Matplotlib will need to be installed if it isn't already. This is the only package allowed for this base part of the 
 # assignment.
@@ -9,6 +10,22 @@ from matplotlib.patches import Rectangle
 
 # import our basic, light-weight png reader library
 import imageIO.png
+
+class Queue:
+    def __init__(self):
+        self.items = []
+
+    def isEmpty(self):
+        return self.items == []
+
+    def enqueue(self, item):
+        self.items.insert(0,item)
+
+    def dequeue(self):
+        return self.items.pop()
+
+    def size(self):
+        return len(self.items)
 
 # Define constant and global variables
 TEST_MODE = False    # Please, DO NOT change this variable!
@@ -130,6 +147,7 @@ def applyFilter(pixel_array, image_width, image_height, filter):
     result_array = createInitializedGreyscalePixelArray(image_width, image_height)
     for i in range(image_height):
         for j in range(image_width):
+            # set border ignore
             if i > hight // 2 - 1 and i < image_height - hight // 2 and j > width // 2 - 1 and j < image_width - width // 2:
                 result_array[i][j] = applyFilterToPixel(pixel_array, i, j, filter)
             else:
@@ -158,6 +176,148 @@ def getTwoDArrayAbsSum(arrayOne, arrayTwo):
             result[i][j] = abs(arrayOne[i][j]) + abs(arrayTwo[i][j])
     return result
 
+def computeThresholdGE(pixel_array, threshold_value, image_width, image_height):
+    result = pixel_array
+    for i in range(0,image_height):
+        for j in range(0,image_width):
+            if pixel_array[i][j] < threshold_value:
+                result[i][j] = 0
+            else:
+                result[i][j] = 255
+    return result
+
+import copy
+
+def computeDilation8Nbh3x3FlatSE(pixel_array, image_width, image_height, kernel):
+    result_array = copy.deepcopy(pixel_array)
+    for i in range(image_height):
+        for j in range(image_width):
+                if checkHit(pixel_array, i, j, kernel):
+                    result_array[i][j] = 1
+
+    return result_array
+
+
+def checkHit(pixel_array, i, j, kernel):
+    imageWidth = len(pixel_array[0])
+    imageHeight = len(pixel_array)
+    height = len(kernel)
+    width = len(kernel[0])
+    for x in range(height):
+        for y in range(width):
+            if kernel[x][y] == 0:
+                continue
+            # Assume border padding is 0
+            elif i - height // 2 + x < 0 or i - height // 2 + x >= imageHeight or j - width // 2 + y < 0 or j - width // 2 + y >= imageWidth:
+                continue
+            elif pixel_array[i - height // 2 + x][j - width // 2 + y] != 0:
+                return True
+    return False
+
+def computeErosion8Nbh3x3FlatSE(pixel_array, image_width, image_height, kernel):
+    result_array = copy.deepcopy(pixel_array)
+    for i in range(image_height):
+        for j in range(image_width):
+                if checkFit(pixel_array, i, j, kernel):
+                    result_array[i][j] = 1
+                else:
+                    result_array[i][j] = 0
+
+    return result_array
+
+def checkFit(pixel_array, i, j, kernel):
+    imageWidth = len(pixel_array[0])
+    imageHeight = len(pixel_array)
+    height = len(kernel)
+    width = len(kernel[0])   
+    for x in range(height):
+        for y in range(width):
+            if kernel[x][y] == 0:
+                continue
+            elif i - height // 2 + x < 0 or i - height // 2 + x >= imageHeight or j - width // 2 + y < 0 or j - width // 2 + y >= imageWidth:
+                return False
+            elif pixel_array[i - height // 2 + x][j - width // 2 + y] == 0:
+                return False
+    return True
+
+def computeConnectedComponentLabeling(pixel_array, image_width, image_height):
+    
+    result_array = copy.deepcopy(pixel_array)
+    for i in range(image_height):
+        for j in range(image_width):
+            if not pixel_array[i][j] == 0:
+                result_array[i][j] = -1
+
+
+    ID = 1
+    resultDict = {}
+    for i in range(image_height):
+        for j in range(image_width):
+            if result_array[i][j] == -1:
+                 size = treverseComponent(result_array, image_width, image_height, i, j, ID)
+                 resultDict[ID] = size
+                 ID = ID + 1
+    return(result_array, resultDict)
+                 
+def treverseComponent(result_array, image_width, image_height, i, j, ID):
+    size = 0
+    travelQueue = Queue()
+    travelQueue.enqueue([i,j])
+    while not travelQueue.isEmpty():
+        [i, j] = travelQueue.dequeue()
+        if not result_array[i][j] == -1:
+            continue
+        size = size + 1
+        result_array[i][j] = ID
+        if i - 1 > 0:
+            if result_array[i - 1][j] == -1:
+                travelQueue.enqueue([i - 1,j])
+        if j - 1 > 0:
+            if result_array[i][j - 1] == -1:
+                travelQueue.enqueue([i, j - 1])
+        if i + 1 < image_height:
+            if result_array[i + 1][j] == -1:
+                travelQueue.enqueue([i + 1, j])
+        if j + 1 < image_width:
+            if result_array[i][j + 1] == -1:
+                travelQueue.enqueue([i, j + 1])
+                
+    return size
+
+def getMinMaxXY(pixel_array, image_width, image_height, ID):
+    max_x = 0
+    max_y = 0
+    min_x = image_width
+    min_y = image_height
+    for i in range(image_height):
+        for j in range(image_width):
+            if pixel_array[i][j] == ID:
+                if i > max_y:
+                    max_y = i
+                if i < min_y:
+                    min_y = i
+                if j > max_x:
+                    max_x = j
+                if j < min_x:
+                    min_x = j
+    return [min_x, min_y, max_x, max_y]
+
+def getColorImage(pixel_array_r, pixel_array_g, pixel_array_b, image_width, image_height):
+    result = []
+    for i in range(image_height):
+        row = []
+        for j in range(image_width):
+            row.append([pixel_array_r[i][j], pixel_array_g[i][j], pixel_array_b[i][j]])
+        result.append(row)
+    return result
+
+def getKernel():
+    return [[0, 0, 1, 0, 0], 
+            [0, 1, 1, 1, 0], 
+            [1, 1, 1, 1, 1], 
+            [0, 1, 1, 1, 0], 
+            [0, 0, 1, 0, 0]]
+
 def getHorizontalScharrFilter():
     return [[3/32, 0, -3/32], [10/32, 0, -10/32], [3/32, 0, -3/32]]
 
@@ -174,7 +334,7 @@ def getMeanFilter():
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
     # This is the default input image, you may change the 'image_name' variable to test other images.
-    image_name = 'easy_case_1'
+    image_name = 'easy_case_6'
     input_filename = f'./Images/easy/{image_name}.png'
     if TEST_MODE:
         input_filename = input_path
@@ -196,8 +356,29 @@ def main(input_path, output_path):
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
+    px_array = computeThresholdGE(px_array, 15, image_width, image_height)
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
 
-
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+    
+    (result_array, resultDict) = computeConnectedComponentLabeling(px_array, image_width, image_height)
+    bounding_box_list = []
+    for key in resultDict:
+        bounding_box_list.append(getMinMaxXY(result_array, image_width, image_height, key))
+    
+    px_array = getColorImage(px_array_r, px_array_g, px_array_b, image_width, image_height)
     
     
     
@@ -210,7 +391,7 @@ def main(input_path, output_path):
     ### bounding_box[3] = max y
     ############################################
     
-    bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
+    #bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
 
     fig, axs = pyplot.subplots(1, 1)
     axs.imshow(px_array, aspect='equal')
