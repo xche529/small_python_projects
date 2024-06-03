@@ -1,7 +1,10 @@
 # Built in packages
-import math
 import sys
+import json
 import copy
+import numpy
+from coin_detection_network.neuralNetwork import neuralNetwork
+from PIL import Image
 
 # Matplotlib will need to be installed if it isn't already. This is the only package allowed for this base part of the 
 # assignment.
@@ -106,6 +109,23 @@ def computeCumulativeHistogram(pixel_array, image_width, image_height, nr_bins =
                     result[z] = result[z] + 1
     return result
 
+def computeHistogram(pixel_array, image_width, image_height, nr_bins = 256):
+    result = [0] * nr_bins
+    for i in range(0,image_height):
+        for j in range(0,image_width):
+            intensity = round(pixel_array[i][j])
+            result[intensity] = result[intensity] + 1
+    return result
+
+
+def computeValueList(pixel_array, image_width, image_height):
+    histogram = computeHistogram(pixel_array, image_width, image_height)
+    result = []
+    for i in range(0,len(histogram)):
+        if histogram[i] != 0:
+            result.append([i, histogram[i]])
+    return result
+
 def findSmallLarge(pixel_array, image_width, image_height, nr_bins = 256):
     cumulativeHistogram = computeCumulativeHistogram(pixel_array, image_width, image_height, nr_bins)
     total = image_width * image_height
@@ -176,14 +196,66 @@ def getTwoDArrayAbsSum(arrayOne, arrayTwo):
             result[i][j] = abs(arrayOne[i][j]) + abs(arrayTwo[i][j])
     return result
 
-def computeThresholdGE(pixel_array, threshold_value, image_width, image_height):
+def computeThresholdGE(pixel_array, image_width, image_height, threshold):
     result = pixel_array
     for i in range(0,image_height):
         for j in range(0,image_width):
-            if pixel_array[i][j] < threshold_value:
+            if pixel_array[i][j] < threshold:
                 result[i][j] = 0
             else:
                 result[i][j] = 255
+    return result
+
+
+def computeAdaptiveThresholdGE(pixel_array, image_width, image_height):
+    valueList = computeValueList(pixel_array, image_width, image_height)
+    j_value = thresholdAdaptationInitialisation(valueList)
+    for i in range(len(valueList),1,-1):
+        jPlusOne = thresholdAdaptationIteration(valueList, i)
+        if jPlusOne == j_value:
+            break
+        j_value = jPlusOne
+    j_value = round(j_value * 0.4)
+    print(j_value)
+    result = computeThresholdGE(pixel_array, image_width, image_height, j_value)
+    return result
+
+    
+def thresholdAdaptationInitialisation(valueList):
+    count = 0
+    sum = 0
+    for i in range(len(valueList)):
+        count = count + valueList[i][1]
+        sum = sum + valueList[i][0] * valueList[i][1]
+    result = sum / count
+    return result
+
+def thresholdAdaptationIteration(valueList, j):
+    sumS = 0
+    sumB = 0
+    countS = 0
+    countB = 0
+    length = len(valueList)
+    if j >= length:
+        return 0
+    for i in range(length):
+        if i < j:
+            countS = countS + valueList[i][1]
+            sumS = sumS + valueList[i][0] * valueList[i][1]
+        else:
+            countB = countB + valueList[i][1]
+            sumB = sumB + valueList[i][0] * valueList[i][1]
+    result = round((sumS / countS + sumB / countB) / 2)
+    return result
+        
+def computeAdaptiveThresholdMethodTwo(pixel_array, image_width, image_height):
+    cumulativeHistogram = computeCumulativeHistogram(pixel_array, image_width, image_height)
+    pixel_number = image_width * image_height
+    for i in range(0,len(cumulativeHistogram)):
+        number = cumulativeHistogram[i]
+        if number >= pixel_number * 0.3:
+            break
+    result = computeThresholdGE(pixel_array, image_width, image_height, i)
     return result
 
 import copy
@@ -311,6 +383,91 @@ def getColorImage(pixel_array_r, pixel_array_g, pixel_array_b, image_width, imag
         result.append(row)
     return result
 
+def getCropedImage(pixel_array,image_width, image_height, min_x, min_y, max_x, max_y):
+    result = []
+    for i in range(image_height):
+        if i < min_y or i > max_y:
+            continue
+        row = []
+        for j in range(image_width):
+            if j < min_x or j > max_x:
+                continue
+            row.append(pixel_array[i][j])
+        result.append(row)
+    return result
+
+def getResultInRatioRange(resultDict,result_array, image_width, image_height):
+    result = {}
+    for key in resultDict:
+        [min_x, min_y, max_x, max_y] = getMinMaxXY(result_array, image_width, image_height, key)
+        ratio = (max_x - min_x) / (max_y - min_y)
+        if ratio < 1.1 and ratio > 0.9:
+            result[key] = resultDict[key]
+    return result
+
+def getRidOfSmallComponent(resultDict):
+    result = {}
+    for key in resultDict:
+        if resultDict[key] > 5000:
+            result[key] = resultDict[key]
+    return result
+
+def checkCoinType(resultDict, imageArray, result_array):
+    weigth_file_name = "coin_detection_network/coin.json"
+    result = {}
+    
+    for key in resultDict:
+        [min_x, min_y, max_x, max_y] = getMinMaxXY(result_array, len(imageArray[0]), len(imageArray), key)
+        print(min_x, min_y, max_x, max_y)
+        px_array = getCropedImage(imageArray, len(imageArray[0]), len(imageArray), min_x, min_y, max_x, max_y)
+
+        image_array = numpy.array(px_array, dtype=numpy.uint8)
+        image = Image.fromarray(image_array, mode='L')
+        
+        # Resize the image to 70x70
+        image = image.resize((70, 70))
+        px_array = numpy.array(image)
+        px_array = px_array.tolist()
+        image_height = len(px_array)
+        image_width = len(px_array[0])
+
+        # Preprocess the image
+        px_array = scaleTo0And255AndQuantize(px_array, image_width, image_height)
+        px_array = computeAdaptiveThresholdMethodTwo(px_array, image_width, image_height)    
+
+        image_array = numpy.array(px_array, dtype=numpy.uint8)
+        image = Image.fromarray(image_array, mode='L')
+
+        pixels = image.getdata()
+        reversedPixels = [abs(255 - pixel) for pixel in pixels]
+        px_array = numpy.reshape(reversedPixels,(70,70))
+        px_array = px_array.tolist()
+
+        pyplot.imshow(px_array, cmap='gray', aspect='equal')
+
+        # Test the image
+        with open(weigth_file_name, 'r') as file:
+            weight_list = json.load(file)
+            wih = weight_list[0]
+            who = weight_list[1]
+        n = neuralNetwork(4900, 200, 6, 0.2)
+        n.who = numpy.array(who)
+        n.wih = numpy.array(wih)
+
+        scaled_input = (numpy.asfarray(reversedPixels) / 255.0 * 0.99) + 0.01
+        outputs = n.query(scaled_input)
+        label = numpy.argmax(outputs)
+        outputs_list = outputs.tolist()
+        test_result = [label, outputs_list[label]]
+        result[key] = test_result
+        
+    return result
+
+def getLaplacianFilter():
+    return [[1, 1, 1],
+            [1, -8, 1],
+            [1, 1, 1]]
+
 def getKernel():
     return [[0, 0, 1, 0, 0], 
             [0, 1, 1, 1, 0], 
@@ -337,7 +494,7 @@ def main(input_path, output_path):
     image_name = 'easy_case_6'
     input_filename = f'./Images/easy/{image_name}.png'
     if TEST_MODE:
-        input_filename = input_path
+        input_filename = input_path 
 
     # we read in the png file, and receive three pixel arrays for red, green and blue components, respectively
     # each pixel array contains 8 bit integer values between 0 and 255 encoding the color values
@@ -348,17 +505,18 @@ def main(input_path, output_path):
     ###################################
     
     
-    px_array = convert_to_greyscale(px_array_r, px_array_g, px_array_b, image_width, image_height)
-    px_array = scaleTo0And255AndQuantize(px_array, image_width, image_height)
-    horizontalEdge = applyFilter(px_array, image_width, image_height, getHorizontalScharrFilter())
-    verticalEdge = applyFilter(px_array, image_width, image_height, getVerticalScharrFilter())
+    greyscale = convert_to_greyscale(px_array_r, px_array_g, px_array_b, image_width, image_height)
+
+    scaled_array = scaleTo0And255AndQuantize(greyscale, image_width, image_height)
+    horizontalEdge = applyFilter(scaled_array, image_width, image_height, getHorizontalScharrFilter())
+    verticalEdge = applyFilter(scaled_array, image_width, image_height, getVerticalScharrFilter())
     px_array = getTwoDArrayAbsSum(verticalEdge,horizontalEdge)
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
     px_array = applyFilter(px_array, image_width, image_height, getMeanFilter())
-    px_array = computeThresholdGE(px_array, 15, image_width, image_height)
-    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
-    px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
+
+    px_array = computeAdaptiveThresholdGE(px_array, image_width, image_height)
+
     px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
     px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
     px_array = computeDilation8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
@@ -370,13 +528,37 @@ def main(input_path, output_path):
     px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
     px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
     px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
-    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
-    px_array = computeErosion8Nbh3x3FlatSE(px_array, image_width, image_height, getKernel())
-    
+
     (result_array, resultDict) = computeConnectedComponentLabeling(px_array, image_width, image_height)
+    resultDict = getRidOfSmallComponent(resultDict)
+    resultDict = getResultInRatioRange(resultDict, result_array, image_width, image_height)
+    coinNumber = len(resultDict)
+    typeDict = checkCoinType(resultDict, greyscale, result_array)
+    
     bounding_box_list = []
     for key in resultDict:
-        bounding_box_list.append(getMinMaxXY(result_array, image_width, image_height, key))
+        locationList = getMinMaxXY(result_array, image_width, image_height, key)
+        typeList = typeDict[key]
+        coinType = typeList[0]
+        if coinType == 0:
+            coinType = "Not a coin"
+        elif coinType == 1:
+            coinType = "1 dollor"
+        elif coinType == 2:
+            coinType = "2 dollor"
+        elif coinType == 3:
+            coinType = "10 cent"
+        elif coinType == 4:
+            coinType = "20 cent"
+        elif coinType == 5:
+            coinType = "50 cent"
+        
+        parablity = typeList[1]
+        print(parablity)
+        coinType = f"{coinType} {round(parablity[0], 2)}"
+        locationList.append(coinType)
+        bounding_box_list.append(locationList)
+        print(key, bounding_box_list[-1])
     
     px_array = getColorImage(px_array_r, px_array_g, px_array_b, image_width, image_height)
     
@@ -409,6 +591,11 @@ def main(input_path, output_path):
         rect = Rectangle(bbox_xy, bbox_width, bbox_height, linewidth=2, edgecolor='r', facecolor='none')
         axs.add_patch(rect)
         
+        label_x = bbox_min_x
+        label_y = bbox_min_y - 10  # Adjust the y position to place the label above the box
+        axs.text(label_x, label_y, bounding_box[4], color='red', fontsize=12, fontweight='bold')
+        
+    axs.text(5, image_height - 5, "coin count:" + str(coinNumber), color='red', fontsize=12, fontweight='bold')
     pyplot.axis('off')
     pyplot.tight_layout()
     default_output_path = f'./output_images/{image_name}_with_bbox.png'

@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./CS373_2024_Assignment_Coin_Detection/coin_detection_network"
+    ]
+}
